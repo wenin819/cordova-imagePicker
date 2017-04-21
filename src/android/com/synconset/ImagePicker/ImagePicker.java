@@ -10,11 +10,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.util.Log;
 
 public class ImagePicker extends CordovaPlugin {
 	public static String TAG = "ImagePicker";
@@ -43,6 +43,9 @@ public class ImagePicker extends CordovaPlugin {
 			if (this.params.has("quality")) {
 				quality = this.params.getInt("quality");
 			}
+			if (this.params.has("maxShowCount")) {
+				intent.putExtra("MAX_SHOW_COUNT", this.params.getInt("maxShowCount"));
+			}
 			intent.putExtra("MAX_IMAGES", max);
 			intent.putExtra("WIDTH", desiredWidth);
 			intent.putExtra("HEIGHT", desiredHeight);
@@ -57,8 +60,26 @@ public class ImagePicker extends CordovaPlugin {
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
 		if (resultCode == Activity.RESULT_OK && data != null) {
 			ArrayList<String> fileNames = data.getStringArrayListExtra("MULTIPLEFILENAMES");
-			JSONArray res = new JSONArray(fileNames);
-			this.callbackContext.success(res);
+			ArrayList<String> realFileNames = data.getStringArrayListExtra("MULTIPLEREALFILENAMES");
+
+			JSONArray resultList = new JSONArray();
+			for(int i = 0; i < fileNames.size(); i++ ){
+				String path = formatPath(fileNames.get(i));
+				String realPath = formatPath(realFileNames.get(i));
+				File file = new File(realPath);
+				JSONObject map = new JSONObject();
+				long date = file.lastModified();
+				try {
+					map.put("date", date);
+					map.put("img", ImageUtil.imgToBase64(path));
+					map.put("filePath", path);
+					map.put("realPath", realPath);
+					resultList.put(map);
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+			}
+			this.callbackContext.success(resultList);
 		} else if (resultCode == Activity.RESULT_CANCELED && data != null) {
 			String error = data.getStringExtra("ERRORMESSAGE");
 			this.callbackContext.error(error);
@@ -68,5 +89,9 @@ public class ImagePicker extends CordovaPlugin {
 		} else {
 			this.callbackContext.error("No images selected");
 		}
+	}
+
+	private String formatPath(String path) {
+		return null != path && path.startsWith("file://") ? path.replace("file://", "") : path;
 	}
 }

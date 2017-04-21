@@ -38,6 +38,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -86,6 +87,7 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
     public static final String WIDTH_KEY = "WIDTH";
     public static final String HEIGHT_KEY = "HEIGHT";
     public static final String QUALITY_KEY = "QUALITY";
+    public static final String MAX_SHOW_COUNT_KEY = "MAX_SHOW_COUNT";
 
     private ImageAdapter ia;
 
@@ -96,7 +98,7 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
     private static final int CURSORLOADER_THUMBS = 0;
     private static final int CURSORLOADER_REAL = 1;
 
-    private Map<String, Integer> fileNames = new HashMap<String, Integer>();
+    private Map<String, Integer> fileNames = new LinkedHashMap<String, Integer>();
 
     private SparseBooleanArray checkStatus = new SparseBooleanArray();
 
@@ -106,6 +108,7 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
     private int desiredWidth;
     private int desiredHeight;
     private int quality;
+    private int maxShowCount = -1;
 
     private GridView gridView;
 
@@ -129,6 +132,7 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
         desiredWidth = getIntent().getIntExtra(WIDTH_KEY, 0);
         desiredHeight = getIntent().getIntExtra(HEIGHT_KEY, 0);
         quality = getIntent().getIntExtra(QUALITY_KEY, 0);
+        maxShowCount = getIntent().getIntExtra(MAX_SHOW_COUNT_KEY, 36);
         maxImageCount = maxImages;
 
         Display display = getWindowManager().getDefaultDisplay();
@@ -164,7 +168,14 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
             }
         });
 
-        ia = new ImageAdapter(this);
+        ia = maxShowCount <= 0 ? new ImageAdapter(this) : new ImageAdapter(this) {
+            private int maxCnt = maxShowCount;
+            @Override
+            public int getCount() {
+                int count = super.getCount();
+                return count < maxCnt ? count : maxCnt;
+            }
+        };
         gridView.setAdapter(ia);
 
         LoaderManager.enableDebugLogging(false);
@@ -173,8 +184,8 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
         setupHeader();
         updateAcceptButton();
         progress = new ProgressDialog(this);
-        progress.setTitle("Processing Images");
-        progress.setMessage("This may take a few moments");
+        progress.setTitle("正在处理图片");
+        progress.setMessage("请等待片刻...");
     }
     
     @Override
@@ -189,9 +200,9 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
         if (maxImages == 0 && isChecked) {
             isChecked = false;
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Maximum " + maxImageCount + " Photos");
-            builder.setMessage("You can only select " + maxImageCount + " photos at a time.");
-            builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            builder.setTitle("最多选择 " + maxImageCount + " 张图片");
+            builder.setMessage("本次您最多选择 " + maxImageCount + " 张图片.");
+            builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int which) { 
                     dialog.cancel();
                 }
@@ -480,19 +491,22 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
     }
     
     
-    private class ResizeImagesTask extends AsyncTask<Set<Entry<String, Integer>>, Void, ArrayList<String>> {
+    private class ResizeImagesTask extends AsyncTask<Set<Entry<String, Integer>>, Void, ArrayList<String>[]> {
         private Exception asyncTaskError = null;
 
+        @SuppressWarnings("unchecked")
         @Override
-        protected ArrayList<String> doInBackground(Set<Entry<String, Integer>>... fileSets) {
+        protected ArrayList<String>[] doInBackground(Set<Entry<String, Integer>>... fileSets) {
             Set<Entry<String, Integer>> fileNames = fileSets[0];
             ArrayList<String> al = new ArrayList<String>();
+            ArrayList<String> fl = new ArrayList<String>();
             try {
                 Iterator<Entry<String, Integer>> i = fileNames.iterator();
                 Bitmap bmp;
                 while(i.hasNext()) {
                     Entry<String, Integer> imageInfo = i.next();
-                    File file = new File(imageInfo.getKey());
+                    String path = imageInfo.getKey();
+                    File file = new File(path);
                     int rotate = imageInfo.getValue().intValue();
                     BitmapFactory.Options options = new BitmapFactory.Options();
                     options.inSampleSize = 1;
@@ -539,8 +553,9 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
 
                     file = this.storeImage(bmp, file.getName());
                     al.add(Uri.fromFile(file).toString());
+                    fl.add(path);
                 }
-                return al;
+                return new ArrayList[]{al, fl};
             } catch(IOException e) {
                 try {
                     asyncTaskError = e;
@@ -552,15 +567,16 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
                 } catch(Exception exception) {
                     // the finally does what we want to do
                 } finally {
-                    return new ArrayList<String>();
+                    return new ArrayList[]{new ArrayList<String>(), new ArrayList<String>()};
                 }
             }
         }
         
         @Override
-        protected void onPostExecute(ArrayList<String> al) {
+        protected void onPostExecute(ArrayList<String>[] arr) {
             Intent data = new Intent();
-
+            ArrayList<String> al = arr[0];
+            ArrayList<String> fl = arr[1];
             if (asyncTaskError != null) {
                 Bundle res = new Bundle();
                 res.putString("ERRORMESSAGE", asyncTaskError.getMessage());
@@ -569,6 +585,7 @@ public class MultiImageChooserActivity extends Activity implements OnItemClickLi
             } else if (al.size() > 0) {
                 Bundle res = new Bundle();
                 res.putStringArrayList("MULTIPLEFILENAMES", al);
+                res.putStringArrayList("MULTIPLEREALFILENAMES", fl);
                 if (imagecursor != null) {
                     res.putInt("TOTALFILES", imagecursor.getCount());
                 }

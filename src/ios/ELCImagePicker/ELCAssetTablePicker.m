@@ -16,7 +16,12 @@
 
 @end
 
-@implementation ELCAssetTablePicker
+@implementation ELCAssetTablePicker {
+
+@private NSMutableArray *tempAssets;
+
+}
+
 
 //Using auto synthesizers
 
@@ -38,7 +43,8 @@
 
     NSMutableArray *tempArray = [[NSMutableArray alloc] init];
     self.elcAssets = tempArray;
-	
+    tempAssets = [[NSMutableArray alloc] init];
+
     if (self.immediateReturn) {
         
     } else {
@@ -107,7 +113,7 @@
                                                       animated:NO];
             }
             
-            [self.navigationItem setTitle:self.singleSelection ? @"Pick Photo" : @"Pick Photos"];
+            [self.navigationItem setTitle:self.singleSelection ? @"选择单张图片" : @"选择多张图片"];
         });
     }
 }
@@ -116,7 +122,7 @@
 {	
 	NSMutableArray *selectedAssetsImages = [[NSMutableArray alloc] init];
 	    
-	for (ELCAsset *elcAsset in self.elcAssets) {
+	for (ELCAsset *elcAsset in tempAssets) {
 		if ([elcAsset selected]) {
 			[selectedAssetsImages addObject:[elcAsset asset]];
 		}
@@ -140,6 +146,7 @@
 
 - (void)assetSelected:(ELCAsset *)asset
 {
+    [tempAssets addObject: asset];
     if (self.singleSelection) {
 
         for (ELCAsset *elcAsset in self.elcAssets) {

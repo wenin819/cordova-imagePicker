@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.locks.ReentrantLock;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -57,6 +58,7 @@ public class ImageFetcher {
 
     private int colWidth;
     private long origId;
+    private ReentrantLock mainLock = new ReentrantLock();
     private ExecutorService executor;
 
     public ImageFetcher() {
@@ -178,6 +180,7 @@ public class ImageFetcher {
          */
         @Override
         protected Bitmap doInBackground(Integer... params) {
+            mainLock.lock();
         	try {
 	            position = params[0];
 	            if (isCancelled()) {
@@ -205,6 +208,8 @@ public class ImageFetcher {
         	}catch(OutOfMemoryError error) {
         		clearCache();
         		return null;
+        	} finally {
+                mainLock.unlock();
         	}
 
         }

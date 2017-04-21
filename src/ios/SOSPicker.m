@@ -64,7 +64,8 @@
 	for (NSDictionary *dict in info) {
         asset = [dict objectForKey:@"ALAsset"];
         // From ELCImagePickerController.m
-
+        NSDate *createTime = (NSDate *)[asset valueForProperty:ALAssetPropertyDate];
+        long long creatTimeLong = [createTime timeIntervalSince1970] * 1000;
         int i = 1;
         do {
             filePath = [NSString stringWithFormat:@"%@/%@%03d.%@", docsPath, CDV_PHOTO_PREFIX, i++, @"jpg"];
@@ -95,7 +96,16 @@
                 result = [CDVPluginResult resultWithStatus:CDVCommandStatus_IO_EXCEPTION messageAsString:[err localizedDescription]];
                 break;
             } else {
-                [resultStrings addObject:[[NSURL fileURLWithPath:filePath] absoluteString]];
+
+                UIImage *image = [UIImage imageWithContentsOfFile:filePath];
+
+                NSData *data = UIImageJPEGRepresentation(image, self.quality/100.0f);
+                NSString *base64 = [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+
+
+                NSDictionary *dic1 = @{@"img" : [base64 stringByReplacingOccurrencesOfString:@"\r\n" withString:@""],@"filePath" : [[NSURL fileURLWithPath:filePath] absoluteString],@"date":[NSNumber numberWithLongLong: creatTimeLong]};
+                    NSLog(@"%@",dic1);
+                [resultStrings addObject:dic1];
             }
         }
 
